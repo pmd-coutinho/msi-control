@@ -1,0 +1,54 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and attach binaries to
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-latest
+    # Arch is rolling, so libadwaita is new enough (the GUI needs 1.7+). The binaries target
+    # Arch, CachyOS and other current distros.
+    container: archlinux:latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Install build dependencies
+        run: pacman -Syu --noconfirm base-devel rust gtk4 libadwaita git github-cli
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Build
+        run: cargo build --release --workspace --locked
+      - name: Package
+        run: |
+          name="msi-control-${TAG}-x86_64-linux"
+          mkdir -p "dist/$name/bin"
+          for b in msi-controld msi-control msi-control-gui msi-control-tray; do
+            strip "target/release/$b"
+            install -m755 "target/release/$b" "dist/$name/bin/$b"
+          done
+          cp -r data "dist/$name/data"
+          install -m755 scripts/install.sh "dist/$name/install.sh"
+          cp README.md LICENSE "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+          ls -l dist
+      - name: Attach to the release
+        run: |
+          for i in $(seq 1 30); do
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && break
+            sleep 10
+          done
+          gh release upload "$TAG" dist/*.tar.gz dist/*.sha256 --clobber --repo "$GITHUB_REPOSITORY"

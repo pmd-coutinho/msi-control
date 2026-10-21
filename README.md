@@ -70,7 +70,11 @@ after staging restores the previous target.
 ## Install
 - Nix: `nixosModules.default` from this flake, `services.msi-control.enable = true;`, plus either
   `services.power-profiles-daemon.enable` or `services.tuned.ppdSupport`.
-- Arch/CachyOS: `cd packaging/arch && makepkg -si` (needs `msi_ec` in the kernel or `msi-ec-dkms`).
+- Arch/CachyOS, prebuilt: download `msi-control-<version>-x86_64-linux.tar.gz` from the
+  [releases](https://github.com/pmd-coutinho/msi-control/releases), extract it and run `./install.sh`.
+  Built on Arch against current GTK4 and libadwaita (1.7+), so it targets Arch, CachyOS and similar.
+- Arch/CachyOS, from source: `./scripts/install.sh` or `cd packaging/arch && makepkg -si`.
+- Either way you need `msi_ec` in the kernel or `msi-ec-dkms`. The Arch paths are untested.
 
 ## First run (nothing here has been exercised as root yet)
 1. Install the D-Bus conf and polkit policy, start the daemon.

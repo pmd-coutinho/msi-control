@@ -781,7 +781,7 @@ dependencies = [
 
 [[package]]
 name = "msi-control"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -792,7 +792,7 @@ dependencies = [
 
 [[package]]
 name = "msi-control-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "nix",
@@ -802,7 +802,7 @@ dependencies = [
 
 [[package]]
 name = "msi-control-gui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "gtk4",
  "libadwaita",
@@ -811,7 +811,7 @@ dependencies = [
 
 [[package]]
 name = "msi-control-tray"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -823,7 +823,7 @@ dependencies = [
 
 [[package]]
 name = "msi-controld"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "futures-util",
