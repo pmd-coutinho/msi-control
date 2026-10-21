@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=MSI Control tray
+Comment=Power profile indicator for MSI laptops
+Exec=msi-control-tray
+Icon=preferences-system-power
+Type=Application
+Categories=System;
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

@@ -1,11 +1,27 @@
 # msi-control
 
+> [!WARNING]
+> **Use at your own risk. This writes to laptop firmware.**
+> GPU MUX switching changes a UEFI variable and calls MSI WMI methods. A bad write can leave a machine
+> with a black screen or in a state that needs a BIOS reset, and a firmware write can't be undone from
+> software. The switching code follows the sequence documented by
+> [hayatboj/msi-gpu-mux-switch](https://github.com/hayatboj/msi-gpu-mux-switch) and is unit-tested only
+> against a mock. It has been run for read-only checks (status and `--dry-run`) on exactly one machine,
+> an **MSI Vector 16 HX A14VHG (MS-15M1), BIOS E15M1IMS.915**. It has **not** completed a real switch yet.
+> The default allowlist (`mux_boards`, `mux_bios`) also permits MS-15M3 / E15M3IMS.116, the machine the
+> upstream project characterized; that board has never been tested with this code. Every other board and
+> BIOS is refused. Do not add yours without reading `crates/core/src/mux_apply.rs`. The EC controls (shift and fan mode, charge limit and the
+> rest) go through the `msi-ec` kernel driver and are far lower risk. Keep disk-encryption recovery keys
+> available before any MUX change. No warranty; see LICENSE.
+
+
 One app for MSI laptops: **msi-ec** (shift/fan/cooler boost/super battery), **GPU MUX** status and switching
 (native EFI+WMI), and **power-profiles-daemon / tuned-ppd** sync.
 
 - `msi-controld` – root daemon, system D-Bus `org.msicontrol.Daemon1`, polkit-gated writes
 - `msi-control` – CLI (`status`, `profile`, `shift`, `fan`, `cooler-boost`, `super-battery`, `mux`)
 - `msi-control-gui` – GTK4/libadwaita front-end (works on Hyprland and KDE)
+- `msi-control-tray` – status-notifier tray icon: shows the profile and switches it (NixOS runs it as a user service; other distros get an XDG autostart entry)
 
 Profile integration uses only the `net.hadess.PowerProfiles` D-Bus API, so it works with
 power-profiles-daemon (CachyOS) and `tuned-ppd` (tuned on NixOS) alike.

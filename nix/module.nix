@@ -10,6 +10,18 @@ let cfg = config.services.msi-control; pkg = self.packages.${pkgs.stdenv.hostPla
     environment.pathsToLink = [ "/share/polkit-1" ];
     systemd.packages = [ pkg ];
     systemd.services.msi-controld.wantedBy = [ "multi-user.target" ];
+    # Tray icon as a user service: Hyprland sessions do not process XDG autostart files.
+    systemd.user.services.msi-control-tray = {
+      description = "MSI Control tray icon";
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      path = [ pkg ]; # the tray starts msi-control-gui from PATH
+      serviceConfig = {
+        ExecStart = "${pkg}/bin/msi-control-tray";
+        Restart = "on-failure";
+      };
+    };
     # Either backend provides net.hadess.PowerProfiles: enable one of
     #   services.power-profiles-daemon.enable = true;   or   services.tuned.ppdSupport = true;
   };

@@ -14,9 +14,10 @@ build() { cd "$startdir/../.."; cargo build --release --workspace --locked --tar
 
 package() {
   cd "$startdir/../.."
-  for b in msi-controld msi-control msi-control-gui; do install -Dm755 "$srcdir/target/release/$b" "$pkgdir/usr/bin/$b"; done
+  for b in msi-controld msi-control msi-control-gui msi-control-tray; do install -Dm755 "$srcdir/target/release/$b" "$pkgdir/usr/bin/$b"; done
   install -Dm644 data/org.msicontrol.Daemon1.conf "$pkgdir/usr/share/dbus-1/system.d/org.msicontrol.Daemon1.conf"
   install -Dm644 data/org.msicontrol.policy "$pkgdir/usr/share/polkit-1/actions/org.msicontrol.policy"
   install -Dm644 data/org.msicontrol.Gui.desktop "$pkgdir/usr/share/applications/org.msicontrol.Gui.desktop"
+  install -Dm644 data/org.msicontrol.Tray.desktop "$pkgdir/etc/xdg/autostart/org.msicontrol.Tray.desktop"
   sed 's|@bindir@|/usr/bin|' data/msi-controld.service | install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/system/msi-controld.service"
 }
