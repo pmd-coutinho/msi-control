@@ -1,0 +1,12 @@
+[Unit]
+Description=MSI laptop control daemon
+After=power-profiles-daemon.service tuned-ppd.service
+
+[Service]
+Type=dbus
+BusName=org.msicontrol.Daemon1
+ExecStart=@bindir@/msi-controld
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

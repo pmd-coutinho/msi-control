@@ -1,0 +1,22 @@
+pkgname=msi-control
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='MSI laptop EC, GPU MUX and power-profile control (daemon, CLI, GTK4 GUI)'
+arch=(x86_64)
+license=(GPL-3.0-or-later)
+depends=(gtk4 libadwaita polkit)
+makedepends=(cargo)
+optdepends=('power-profiles-daemon: profile backend (or tuned-ppd; either provides net.hadess.PowerProfiles)'
+            'msi-ec-dkms: EC driver if your kernel lacks msi-ec')
+source=()
+
+build() { cd "$startdir/../.."; cargo build --release --workspace --locked --target-dir "$srcdir/target"; }
+
+package() {
+  cd "$startdir/../.."
+  for b in msi-controld msi-control msi-control-gui; do install -Dm755 "$srcdir/target/release/$b" "$pkgdir/usr/bin/$b"; done
+  install -Dm644 data/org.msicontrol.Daemon1.conf "$pkgdir/usr/share/dbus-1/system.d/org.msicontrol.Daemon1.conf"
+  install -Dm644 data/org.msicontrol.policy "$pkgdir/usr/share/polkit-1/actions/org.msicontrol.policy"
+  install -Dm644 data/org.msicontrol.Gui.desktop "$pkgdir/usr/share/applications/org.msicontrol.Gui.desktop"
+  sed 's|@bindir@|/usr/bin|' data/msi-controld.service | install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/system/msi-controld.service"
+}

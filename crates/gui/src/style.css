@@ -1,0 +1,45 @@
+/* Accent follows the active power profile. Libadwaita widgets (switches, sliders, focus rings)
+   pick the colour up through its CSS variables. Surfaces stay on the system theme. */
+window.profile-power-saver { --accent-bg-color: #2f9e77; --accent-color: #3fb68b; }
+window.profile-balanced    { --accent-bg-color: #3584e4; --accent-color: #62a0ea; }
+window.profile-performance { --accent-bg-color: #e66100; --accent-color: #f08a3c; }
+
+.tile {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: alpha(currentColor, 0.06);
+  box-shadow: inset 0 0 0 1px alpha(currentColor, 0.10);
+  transition: background 120ms, box-shadow 120ms;
+}
+.tile:hover { background: alpha(currentColor, 0.10); }
+.tile:checked {
+  background: alpha(var(--tile), 0.20);
+  box-shadow: inset 0 0 0 2px var(--tile);
+}
+.tile:disabled { opacity: 0.45; }
+.tile .tile-icon { color: var(--tile); }
+.tile .tile-state { color: var(--tile); font-weight: 700; font-size: 0.85em; }
+.tile-power-saver { --tile: #3fb68b; }
+.tile-balanced    { --tile: #62a0ea; }
+.tile-performance { --tile: #f08a3c; }
+.tile-hybrid      { --tile: #e0a93b; }
+.tile-discrete    { --tile: #e5534b; }
+.tile-integrated  { --tile: #2fb5ad; }
+
+.thermal-band {
+  padding: 18px 24px 14px 24px;
+  border-radius: 18px;
+  background: alpha(currentColor, 0.045);
+  border-top: 3px solid var(--accent-bg-color);
+}
+.temp {
+  font-size: 56px;
+  font-weight: 200;
+  font-feature-settings: "tnum";
+  line-height: 1;
+}
+.temp.hot { color: var(--error-color); }
+.temp-unit { font-size: 22px; font-weight: 300; opacity: 0.6; margin-top: 4px; }
+.sensor-name { font-weight: 700; }
+.fan-reading { font-feature-settings: "tnum"; }
+.override-note { color: var(--warning-color); }

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=MSI Control
+Comment=MSI laptop performance, fans, GPU MUX
+Exec=msi-control-gui
+Icon=preferences-system-power
+Type=Application
+Categories=System;Settings;
