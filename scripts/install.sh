@@ -26,5 +26,7 @@ printf 'msi_ec\nmsi_wmi_platform\n' | sudo tee /etc/modules-load.d/msi-control.c
 sudo modprobe msi_ec msi_wmi_platform 2>/dev/null || true
 sudo systemctl reload dbus-broker 2>/dev/null || sudo systemctl reload dbus 2>/dev/null || true
 sudo systemctl daemon-reload
-sudo systemctl enable --now msi-controld.service
+sudo systemctl enable msi-controld.service
+# restart, not just start: on an upgrade the old daemon would otherwise keep running
+sudo systemctl restart msi-controld.service
 echo "Installed. Try: msi-control status"

@@ -10,6 +10,8 @@ let cfg = config.services.msi-control; pkg = self.packages.${pkgs.stdenv.hostPla
     environment.pathsToLink = [ "/share/polkit-1" ];
     systemd.packages = [ pkg ];
     systemd.services.msi-controld.wantedBy = [ "multi-user.target" ];
+    # NVML (GPU limits) is loaded at runtime from the driver, which NixOS exposes here.
+    systemd.services.msi-controld.environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
     # Tray icon as a user service: Hyprland sessions do not process XDG autostart files.
     systemd.user.services.msi-control-tray = {
       description = "MSI Control tray icon";

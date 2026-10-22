@@ -5,12 +5,36 @@ use std::collections::BTreeMap;
 
 pub const CONFIG_PATH: &str = "/etc/msi-control/config.toml";
 
+/// CPU limits applied with a profile. Unset fields are left as they are, so by default a profile
+/// changes nothing on the CPU side.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CpuProfile {
+    /// Sustained power limit (PL1) in watts.
+    pub pl1_w: Option<u32>,
+    /// Burst power limit (PL2) in watts.
+    pub pl2_w: Option<u32>,
+    pub turbo: Option<bool>,
+    pub max_perf_pct: Option<u32>,
+}
+
+/// NVIDIA GPU limits applied with a profile; unset fields are left alone. Skipped while the GPU is
+/// asleep, so a profile change never wakes it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GpuProfile {
+    pub power_w: Option<u32>,
+    pub max_clock_mhz: Option<u32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EcProfile {
     pub shift_mode: String,
     pub fan_mode: String,
     #[serde(default)]
     pub cooler_boost: bool,
+    #[serde(default)]
+    pub cpu: CpuProfile,
+    #[serde(default)]
+    pub gpu: GpuProfile,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,7 +77,7 @@ fn yes() -> bool {
 
 impl Default for Config {
     fn default() -> Self {
-        let p = |s: &str, f: &str| EcProfile { shift_mode: s.into(), fan_mode: f.into(), cooler_boost: false };
+        let p = |s: &str, f: &str| EcProfile { shift_mode: s.into(), fan_mode: f.into(), cooler_boost: false, cpu: CpuProfile::default(), gpu: GpuProfile::default() };
         Self {
             profiles: BTreeMap::from([
                 ("power-saver".into(), p("eco", "silent")),
@@ -84,5 +108,28 @@ impl Config {
             (Some((k, _)), None) => Some(k.as_str()),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cpu_limits_are_optional_in_toml() {
+        let c: Config = toml::from_str(
+            "[profiles.balanced]\nshift_mode = \"comfort\"\nfan_mode = \"auto\"\n\
+             [profiles.power-saver]\nshift_mode = \"eco\"\nfan_mode = \"auto\"\n\
+             [profiles.power-saver.cpu]\npl1_w = 45\nturbo = false\n",
+        )
+        .unwrap();
+        assert_eq!(c.profiles["balanced"].cpu, CpuProfile::default());
+        assert_eq!(c.profiles["power-saver"].cpu.pl1_w, Some(45));
+        assert_eq!(c.profiles["power-saver"].cpu.turbo, Some(false));
+    }
+
+    #[test]
+    fn default_config_does_not_touch_the_cpu() {
+        assert!(Config::default().profiles.values().all(|p| p.cpu == CpuProfile::default() && p.gpu == GpuProfile::default()));
     }
 }

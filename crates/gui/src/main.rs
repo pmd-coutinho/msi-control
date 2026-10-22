@@ -77,6 +77,16 @@ struct Ui {
     webcam: adw::SwitchRow,
     webcam_block: adw::SwitchRow,
 
+    cpu_group: adw::PreferencesGroup,
+    cpu_turbo: adw::SwitchRow,
+    cpu_pl1: gtk::Scale,
+    cpu_pl2: gtk::Scale,
+    cpu_perf: gtk::Scale,
+
+    gpu_group: adw::PreferencesGroup,
+    gpu_row: adw::ActionRow,
+    gpu_power: gtk::Scale,
+
     mux: Vec<Tile>,
     mux_banner: adw::Banner,
     mux_apply: gtk::Button,
@@ -218,6 +228,25 @@ fn spark(hist: Hist, color: Rc<dyn Fn() -> (f64, f64, f64)>) -> gtk::DrawingArea
     a
 }
 
+/// Scrolling the page must not move a power or charge limit by accident.
+fn no_wheel(sc: &gtk::Scale) {
+    let c = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+    c.set_propagation_phase(gtk::PropagationPhase::Capture);
+    c.connect_scroll(|_, _, _| glib::Propagation::Stop);
+    sc.add_controller(c);
+}
+
+fn limit_scale(min: f64, max: f64, step: f64, unit: &'static str) -> gtk::Scale {
+    let sc = gtk::Scale::with_range(gtk::Orientation::Horizontal, min, max, step);
+    sc.set_width_request(220);
+    sc.set_valign(gtk::Align::Center);
+    sc.set_draw_value(true);
+    sc.set_value_pos(gtk::PositionType::Left);
+    sc.set_format_value_func(move |_, v| format!("{v:.0} {unit}"));
+    no_wheel(&sc);
+    sc
+}
+
 fn battery_text() -> String {
     let dir = std::fs::read_dir("/sys/class/power_supply").ok().and_then(|d| {
         d.filter_map(|e| e.ok().map(|e| e.path())).find(|p| {
@@ -284,6 +313,7 @@ fn build_ui(app: &adw::Application) -> Rc<Ui> {
     charge.set_valign(gtk::Align::Center);
     charge.set_draw_value(true);
     charge.set_value_pos(gtk::PositionType::Left);
+    no_wheel(&charge);
     for m in [60.0, 80.0, 100.0] {
         charge.add_mark(m, gtk::PositionType::Bottom, None);
     }
@@ -303,6 +333,28 @@ fn build_ui(app: &adw::Application) -> Rc<Ui> {
     keys.add(&row_with("Windows key position", "", &win_key));
     keys.add(&webcam);
     keys.add(&webcam_block);
+
+    // CPU limits
+    let cpu_turbo = adw::SwitchRow::builder().title("Turbo boost").subtitle("Let cores run above their base speed.").build();
+    let cpu_pl1 = limit_scale(15.0, 150.0, 1.0, "W");
+    let cpu_pl2 = limit_scale(15.0, 220.0, 1.0, "W");
+    let cpu_perf = limit_scale(20.0, 100.0, 5.0, "%");
+    let cpu_group = adw::PreferencesGroup::builder()
+        .title("CPU limits")
+        .description("Lower these to run cooler and quieter. They reset on reboot, and a profile can set them again.")
+        .build();
+    cpu_group.add(&cpu_turbo);
+    cpu_group.add(&row_with("Sustained power", "Held during long loads.", &cpu_pl1));
+    cpu_group.add(&row_with("Burst power", "Short peaks above the sustained limit.", &cpu_pl2));
+    cpu_group.add(&row_with("Top speed", "Share of the maximum frequency.", &cpu_perf));
+    cpu_group.set_visible(false);
+
+    // GPU limits
+    let gpu_power = limit_scale(5.0, 60.0, 1.0, "W");
+    let gpu_row = row_with("Power limit", "", &gpu_power);
+    let gpu_group = adw::PreferencesGroup::builder().title("GPU limits").build();
+    gpu_group.add(&gpu_row);
+    gpu_group.set_visible(false);
 
     // Graphics
     let mux: Vec<Tile> = MUX_MODES.iter().map(|(id, title, cap)| tile(id, &format!("tile-{id}"), None, title, cap)).collect();
@@ -330,6 +382,8 @@ fn build_ui(app: &adw::Application) -> Rc<Ui> {
     let right = gtk::Box::new(gtk::Orientation::Vertical, 18);
     right.set_hexpand(true);
     right.append(&keys);
+    right.append(&cpu_group);
+    right.append(&gpu_group);
     let cols = gtk::Box::new(gtk::Orientation::Horizontal, 18);
     cols.set_homogeneous(true);
     cols.append(&left);
@@ -425,6 +479,14 @@ fn build_ui(app: &adw::Application) -> Rc<Ui> {
         win_key,
         webcam,
         webcam_block,
+        cpu_group,
+        cpu_turbo,
+        cpu_pl1,
+        cpu_pl2,
+        cpu_perf,
+        gpu_group,
+        gpu_row,
+        gpu_power,
         mux,
         mux_banner,
         mux_apply,
@@ -623,6 +685,44 @@ impl Ui {
             self.webcam_block.set_active(b("/ec/webcam_block"));
         }
 
+        // CPU limits (older daemons have no /cpu)
+        self.cpu_group.set_visible(st.pointer("/cpu").is_some());
+        if fresh("/cpu/no_turbo") {
+            self.cpu_turbo.set_active(!b("/cpu/no_turbo"));
+        }
+        for (path, sc) in [("/cpu/pl1_w", &self.cpu_pl1), ("/cpu/pl2_w", &self.cpu_pl2), ("/cpu/max_perf_pct", &self.cpu_perf)] {
+            if fresh(path) {
+                if let Some(v) = n(path) {
+                    sc.set_value(v);
+                }
+            }
+        }
+
+        // GPU limits. A sleeping GPU is left alone: asking it anything would wake it.
+        self.gpu_group.set_visible(b("/gpu/present"));
+        let awake = b("/gpu/awake");
+        self.gpu_power.set_sensitive(awake);
+        if !awake {
+            self.gpu_group.set_description(Some("The GPU is asleep (Hybrid mode). Limits appear once something wakes it."));
+            self.gpu_row.set_subtitle("");
+        } else if let Some(e) = s("/gpu/error") {
+            self.gpu_group.set_description(Some(&e));
+        } else {
+            self.gpu_group.set_description(Some("Lower the power limit to run cooler. It can't go above the maker's default, and resets when the driver reloads."));
+            let (draw, clk) = (n("/gpu/power_draw_w"), n("/gpu/clock_mhz"));
+            self.gpu_row.set_subtitle(&format!("Drawing {} W at {} MHz.", draw.map_or("–".into(), |d| format!("{d:.0}")), clk.map_or("–".into(), |c| format!("{c:.0}"))));
+            if let (Some(lo), Some(hi)) = (n("/gpu/power_min_w"), n("/gpu/power_default_w")) {
+                if self.gpu_power.adjustment().lower() != lo || self.gpu_power.adjustment().upper() != hi {
+                    self.gpu_power.set_range(lo, hi);
+                }
+            }
+            if fresh("/gpu/power_limit_w") {
+                if let Some(v) = n("/gpu/power_limit_w") {
+                    self.gpu_power.set_value(v);
+                }
+            }
+        }
+
         // Graphics
         let (cur, pend) = (s("/mux/current"), s("/mux/pending"));
         let avail: Vec<String> = st
@@ -723,6 +823,33 @@ fn wire(ui: &Rc<Ui>) {
         });
         *u.charge_timer.borrow_mut() = Some(id);
     });
+
+    // CPU limits
+    let u = ui.clone();
+    ui.cpu_turbo.connect_active_notify(move |r| {
+        if !u.guard.get() {
+            u.write("/cpu/no_turbo", "SetAttr", ("cpu_turbo", if r.is_active() { "on" } else { "off" }).to_variant(), 25_000);
+        }
+    });
+    for (sc, attr, path) in [(&ui.cpu_pl1, "cpu_pl1", "/cpu/pl1_w"), (&ui.cpu_pl2, "cpu_pl2", "/cpu/pl2_w"), (&ui.cpu_perf, "cpu_max_perf", "/cpu/max_perf_pct"), (&ui.gpu_power, "gpu_power", "/gpu/power_limit_w")] {
+        let timer: Rc<RefCell<Option<glib::SourceId>>> = Rc::default();
+        let u = ui.clone();
+        sc.connect_value_changed(move |s| {
+            if u.guard.get() {
+                return;
+            }
+            u.inflight.borrow_mut().insert(path.to_owned());
+            if let Some(id) = timer.borrow_mut().take() {
+                id.remove();
+            }
+            let (u2, t2, v) = (u.clone(), timer.clone(), (s.value().round() as u32).to_string());
+            let id = glib::timeout_add_local_once(Duration::from_millis(600), move || {
+                t2.borrow_mut().take();
+                u2.write(path, "SetAttr", (attr, v.as_str()).to_variant(), 25_000);
+            });
+            *timer.borrow_mut() = Some(id);
+        });
+    }
 
     // Graphics: tiles only choose a target; the button runs checks, asks, then writes.
     for t in &ui.mux {

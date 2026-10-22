@@ -46,6 +46,30 @@ shift_mode = "turbo"
 fan_mode = "advanced"
 ```
 
+### CPU and GPU limits (optional, per profile)
+Profiles can also set CPU and GPU limits. Anything you leave out is left alone, so by default a profile
+changes nothing here. Limits reset on reboot; the daemon re-applies them when the profile changes.
+
+```toml
+[profiles.power-saver.cpu]
+pl1_w = 45            # sustained power, 15-150 W
+pl2_w = 65            # burst power, 15-220 W
+turbo = false
+max_perf_pct = 80     # share of the top frequency, 20-100
+
+[profiles.power-saver.gpu]
+power_w = 35          # NVIDIA power limit, never above the maker's default
+```
+
+- CPU limits use `intel_pstate` and RAPL. The CPU exposes RAPL twice (MSR and MMIO) and obeys the lower
+  value, so both are written. `thermald --adaptive` may change them again on its own; check the value after
+  about 30 seconds.
+- GPU limits use NVML directly (no `nvidia-smi`). A sleeping GPU is never queried or woken, so profile
+  changes in Hybrid mode skip the GPU limits. Many laptop GPUs refuse power-limit or clock-lock changes;
+  you get the driver's error message. On NixOS the daemon needs `LD_LIBRARY_PATH=/run/opengl-driver/lib`,
+  which the module sets.
+- From the CLI: `msi-control set cpu_pl1 90`, `cpu_turbo off`, `gpu_power 40`, `gpu_clock_max 1800`.
+
 **Single writer rule:** tuned profiles that write `shift_mode` through the `[sysfs]` plugin
 (e.g. custom `msi-*` profiles) race with this daemon. Remove those lines and let the daemon own the EC,
 or keep `ec_to_ppd = false`. The daemon re-asserts its settings 3 s after each profile change.

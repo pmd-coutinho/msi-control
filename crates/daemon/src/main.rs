@@ -67,8 +67,8 @@ fn fingerprint(sh: &mut Shared, ppd: &Option<String>) -> String {
     let e = sh.ec.state();
     let m = mux_state(sh);
     format!(
-        "{ppd:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
-        e.shift_mode, e.fan_mode, e.cooler_boost, e.super_battery, e.webcam, e.webcam_block, e.fn_key, e.win_key, e.charge_end, m.map(|m| (m.current, m.pending))
+        "{ppd:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
+        format!("{:?}", msi_control_core::cpu::state()), e.shift_mode, e.fan_mode, e.cooler_boost, e.super_battery, e.webcam, e.webcam_block, e.fn_key, e.win_key, e.charge_end, m.map(|m| (m.current, m.pending))
     )
 }
 
@@ -100,6 +100,8 @@ impl Daemon {
         };
         serde_json::json!({
             "ec": sh.ec.state(),
+            "cpu": msi_control_core::cpu::state(),
+            "gpu": tokio::task::spawn_blocking(msi_control_core::gpu::state).await.unwrap_or_default(),
             "mux": mux,
             "ppd_profile": ppd,
             "profiles": sh.config.profiles,
@@ -129,7 +131,18 @@ impl Daemon {
             if name == "shift_mode" {
                 sh.last_write = Instant::now();
             }
-            sh.ec.set_attr(&name, &value).map_err(fail)?;
+            if name.starts_with("cpu_") {
+                msi_control_core::cpu::set_attr(&name, &value).map_err(fail)?;
+            } else if name.starts_with("gpu_") {
+                // NVML calls block; keep them off the async executor.
+                let (n, v) = (name.clone(), value.clone());
+                tokio::task::spawn_blocking(move || msi_control_core::gpu::set_attr(&n, &v))
+                    .await
+                    .map_err(|e| fdo::Error::Failed(e.to_string()))?
+                    .map_err(fail)?;
+            } else {
+                sh.ec.set_attr(&name, &value).map_err(fail)?;
+            }
         }
         let _ = Self::state_changed(&em).await;
         Ok(())
@@ -221,11 +234,15 @@ fn apply_profile(sh: &mut Shared, profile: &str) {
     let chosen = if on_battery { sh.config.battery_profiles.get(profile) } else { None };
     let Some(p) = chosen.or_else(|| sh.config.profiles.get(profile)).cloned() else { return };
     sh.last_write = Instant::now();
-    for r in [
+    let results = [
         sh.ec.set_shift_mode(&p.shift_mode),
         sh.ec.set_fan_mode(&p.fan_mode),
         sh.ec.set_cooler_boost(p.cooler_boost),
-    ] {
+    ]
+    .into_iter()
+    .chain(msi_control_core::cpu::apply(&p.cpu))
+    .chain(msi_control_core::gpu::apply(&p.gpu));
+    for r in results {
         if let Err(e) = r {
             eprintln!("apply profile {profile}: {e:#}");
         }

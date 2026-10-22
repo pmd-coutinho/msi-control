@@ -35,7 +35,7 @@ enum Cmd {
     Fan { mode: String },
     CoolerBoost { state: OnOff },
     SuperBattery { state: OnOff },
-    /// Set any attribute: shift_mode fan_mode cooler_boost super_battery webcam webcam_block fn_key win_key charge_end
+    /// Set any attribute: shift_mode fan_mode cooler_boost super_battery webcam webcam_block fn_key win_key charge_end cpu_turbo cpu_max_perf cpu_pl1 cpu_pl2 gpu_power gpu_clock_max
     Set { name: String, value: String },
     /// Stage GPU MUX mode (hybrid | discrete | integrated); fully power off afterwards
     Mux {
