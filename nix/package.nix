@@ -1,7 +1,7 @@
 { lib, rustPlatform, pkg-config, wrapGAppsHook4, gtk4, libadwaita, glib }:
 rustPlatform.buildRustPackage {
   pname = "msi-control";
-  version = "0.1.1";
+  version = "0.1.2";
   src = lib.cleanSource ../.;
   cargoLock.lockFile = ../Cargo.lock;
   nativeBuildInputs = [ pkg-config wrapGAppsHook4 ];
