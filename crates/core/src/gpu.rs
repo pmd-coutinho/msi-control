@@ -21,9 +21,13 @@ pub struct GpuState {
     pub awake: bool,
     pub name: Option<String>,
     pub power_draw_w: Option<f32>,
-    /// Limit in force, and the range we allow (never above the vendor default).
+    /// Limit in force. On MSI laptops it follows the shift mode (60/120/175 W on the tested
+    /// RTX 4080) once the DPTF ACPI bug is fixed and nvidia-powerd runs.
     pub power_limit_w: Option<u32>,
+    /// Range the driver accepts. The maximum is the card's rated limit, the ceiling we allow.
     pub power_min_w: Option<u32>,
+    pub power_max_w: Option<u32>,
+    /// What the driver calls "default": the base limit, not a ceiling.
     pub power_default_w: Option<u32>,
     pub clock_mhz: Option<u32>,
     pub clock_max_mhz: Option<u32>,
@@ -63,16 +67,20 @@ pub fn state() -> GpuState {
     st.power_draw_w = dev.power_usage().ok().map(|mw| mw as f32 / 1000.0);
     st.power_limit_w = dev.enforced_power_limit().ok().map(w);
     st.power_default_w = dev.power_management_limit_default().ok().map(w);
-    st.power_min_w = dev.power_management_limit_constraints().ok().map(|c| w(c.min_limit).max(1));
+    if let Ok(c) = dev.power_management_limit_constraints() {
+        st.power_min_w = Some(w(c.min_limit).max(1));
+        st.power_max_w = Some(w(c.max_limit));
+    }
     st.clock_mhz = dev.clock_info(Clock::Graphics).ok();
     st.clock_max_mhz = dev.max_clock_info(Clock::Graphics).ok();
     st
 }
 
-/// Pure range check for a power limit: between the driver minimum and the vendor default.
-pub fn check_power(w: u32, min: u32, default: u32) -> Result<()> {
-    if w < min || w > default {
-        bail!("GPU power limit must be {min}-{default} W (the vendor default is the ceiling), got {w}");
+/// Pure range check for a power limit: within what the driver reports it accepts. The maximum is
+/// the card's rating set by the vendor; the "default" limit is only the base step, not a ceiling.
+pub fn check_power(w: u32, min: u32, max: u32) -> Result<()> {
+    if w < min || w > max {
+        bail!("GPU power limit must be {min}-{max} W, got {w}");
     }
     Ok(())
 }
@@ -87,9 +95,9 @@ pub fn check_clock(mhz: u32, max: u32) -> Result<()> {
 pub fn set_power_limit(w: u32) -> Result<()> {
     let nvml = Nvml::init().context("NVML unavailable")?;
     let mut dev = nvml.device_by_index(0).context("no NVIDIA device")?;
-    let default = dev.power_management_limit_default().context("read default power limit")? / 1000;
-    let min = (dev.power_management_limit_constraints().context("read power limit range")?.min_limit / 1000).max(1);
-    check_power(w, min, default)?;
+    let c = dev.power_management_limit_constraints().context("read power limit range")?;
+    let (min, max) = ((c.min_limit / 1000).max(1), c.max_limit / 1000);
+    check_power(w, min, max)?;
     dev.set_power_management_limit(w * 1000)
         .map_err(|e| anyhow::anyhow!("the driver refused the power limit ({e}); many laptop GPUs lock this"))
 }
@@ -139,13 +147,15 @@ pub fn apply(p: &GpuProfile) -> Vec<Result<()>> {
 mod tests {
     use super::*;
 
+    /// Regression: the driver reports a 60 W "default" that is only the base step. With the
+    /// DPTF fix the limit runs at 120 W (comfort) or 175 W (turbo), so 60 W must not be the cap.
     #[test]
-    fn power_is_bounded_by_the_vendor_default() {
-        // RTX 4080 Laptop on the tested machine: driver minimum 5 W, vendor default 60 W.
-        assert!(check_power(45, 5, 60).is_ok());
-        assert!(check_power(60, 5, 60).is_ok());
-        assert!(check_power(61, 5, 60).is_err());
-        assert!(check_power(4, 5, 60).is_err());
+    fn power_is_bounded_by_the_driver_maximum_not_the_default() {
+        // RTX 4080 Laptop on the tested machine: driver range 5-175 W, "default" 60 W.
+        assert!(check_power(120, 5, 175).is_ok());
+        assert!(check_power(175, 5, 175).is_ok());
+        assert!(check_power(176, 5, 175).is_err());
+        assert!(check_power(4, 5, 175).is_err());
     }
 
     #[test]

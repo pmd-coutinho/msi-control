@@ -350,7 +350,7 @@ fn build_ui(app: &adw::Application) -> Rc<Ui> {
     cpu_group.set_visible(false);
 
     // GPU limits
-    let gpu_power = limit_scale(5.0, 60.0, 1.0, "W");
+    let gpu_power = limit_scale(5.0, 175.0, 1.0, "W");
     let gpu_row = row_with("Power limit", "", &gpu_power);
     let gpu_group = adw::PreferencesGroup::builder().title("GPU limits").build();
     gpu_group.add(&gpu_row);
@@ -708,10 +708,10 @@ impl Ui {
         } else if let Some(e) = s("/gpu/error") {
             self.gpu_group.set_description(Some(&e));
         } else {
-            self.gpu_group.set_description(Some("Lower the power limit to run cooler. It can't go above the maker's default, and resets when the driver reloads."));
+            self.gpu_group.set_description(Some("The shift mode sets this limit on its own; lowering it here lasts until the next shift-mode or profile change, or a driver reload."));
             let (draw, clk) = (n("/gpu/power_draw_w"), n("/gpu/clock_mhz"));
             self.gpu_row.set_subtitle(&format!("Drawing {} W at {} MHz.", draw.map_or("–".into(), |d| format!("{d:.0}")), clk.map_or("–".into(), |c| format!("{c:.0}"))));
-            if let (Some(lo), Some(hi)) = (n("/gpu/power_min_w"), n("/gpu/power_default_w")) {
+            if let (Some(lo), Some(hi)) = (n("/gpu/power_min_w"), n("/gpu/power_max_w")) {
                 if self.gpu_power.adjustment().lower() != lo || self.gpu_power.adjustment().upper() != hi {
                     self.gpu_power.set_range(lo, hi);
                 }

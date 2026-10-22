@@ -58,12 +58,16 @@ turbo = false
 max_perf_pct = 80     # share of the top frequency, 20-100
 
 [profiles.power-saver.gpu]
-power_w = 35          # NVIDIA power limit, never above the maker's default
+power_w = 35          # NVIDIA power limit, within the range the driver reports
 ```
 
 - CPU limits use `intel_pstate` and RAPL. The CPU exposes RAPL twice (MSR and MMIO) and obeys the lower
   value, so both are written. `thermald --adaptive` may change them again on its own; check the value after
   about 30 seconds.
+- On MSI laptops the shift mode itself sets the GPU limit (on the tested RTX 4080: eco 60 W, comfort
+  120 W, turbo 175 W), but only if `nvidia-powerd` (Dynamic Boost) runs and MSI's DPTF ACPI table bug is
+  fixed; otherwise the GPU stays at 60 W. See [msi-ec#352](https://github.com/BeardOverflow/msi-ec/issues/352).
+  A limit set here lasts until the next shift-mode or profile change.
 - GPU limits use NVML directly (no `nvidia-smi`). A sleeping GPU is never queried or woken, so profile
   changes in Hybrid mode skip the GPU limits. Many laptop GPUs refuse power-limit or clock-lock changes;
   you get the driver's error message. On NixOS the daemon needs `LD_LIBRARY_PATH=/run/opengl-driver/lib`,
